@@ -2,8 +2,8 @@ name: 检查B站UP主动态并推送到飞书
 
 on:
   schedule:
-    - cron: '*/20 * * * *'  # 每20分钟检查一次（UTC时间，北京时间 = UTC+8）
-  workflow_dispatch:        # 允许手动触发
+    - cron: '*/20 * * * *'   # 每20分钟检查一次（UTC时间，北京时间 = UTC+8）
+  workflow_dispatch:         # 允许手动触发
 
 jobs:
   check:
@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}  # 👈 关键：赋予写权限
 
       - name: 设置 Python 环境
         uses: actions/setup-python@v5
@@ -29,10 +31,10 @@ jobs:
           BILI_UIDS: ${{ secrets.BILI_UIDS }}
         run: python main.py
 
-      - name: 提交 last_ids.json 以记录最新动态ID
+      - name: 提交 last_ids.json 以持久化最新动态ID
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add last_ids.json
-          git diff --staged --quiet && echo "✅ 无新动态，无需提交" || git commit -m "chore: update last dynamic IDs"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
+          git diff --staged --quiet && echo "✅ 无新动态，跳过提交" || git commit -m "chore: update last dynamic IDs"
+          git push
