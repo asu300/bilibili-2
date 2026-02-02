@@ -2,8 +2,15 @@ name: 检查B站UP主动态并推送到飞书
 
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '*/20 * * * *'   # 每20分钟执行一次，按需调整
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bilibili-notify-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
@@ -13,15 +20,21 @@ jobs:
       - name: 检出代码（带写权限）
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }} 
+          persist-credentials: true
+          fetch-depth: 0
 
       - name: 设置 Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
       - name: 安装依赖
-        run: pip install requests
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install requests
+          fi
 
       - name: 运行监控脚本
         env:
@@ -29,10 +42,16 @@ jobs:
           BILI_UIDS: ${{ secrets.BILI_UIDS }}
         run: python main.py
 
-      - name: 提交 last_ids.json
+      - name: 提交 last_ids.json（仅在有变更时）
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add last_ids.json
-          git diff --staged --quiet && echo "✅ 无变更" || git commit -m "chore: update last dynamic IDs"
-          git push
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # 将文件暂存（若不存在也不会触发错误）
+          git add last_ids.json || true
+          # 如果有暂存变更则提交并 push 回当前分支
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update last dynamic IDs [ci skip]" || true
+            git push origin HEAD:${{ github.ref_name }} || echo "⚠️ push 失败，请检查分支保护或权限"
+          else
+            echo "✅ last_ids.json 无变更"
+          fi
