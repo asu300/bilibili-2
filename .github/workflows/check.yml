@@ -1,34 +1,38 @@
-name: 检查B站动态
+name: 检查B站UP主动态并推送到飞书
 
 on:
   schedule:
-    - cron: '*/20 * * * *'  # 每20分钟检查一次（UTC时间）
+    - cron: '*/20 * * * *'  # 每20分钟检查一次（UTC时间，北京时间 = UTC+8）
   workflow_dispatch:        # 允许手动触发
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set up Python
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python 环境
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
-        run: pip install requests
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
 
-      - name: Run notifier
+      - name: 运行B站动态监控脚本
         env:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           BILI_UIDS: ${{ secrets.BILI_UIDS }}
         run: python main.py
 
-      - name: Commit last_ids.json (for history tracking)
+      - name: 提交 last_ids.json 以记录最新动态ID
         run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'action@github.com'
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add last_ids.json
-          git commit -m "Update last dynamic IDs" || echo "No changes"
-          git push
+          git diff --staged --quiet && echo "✅ 无新动态，无需提交" || git commit -m "chore: update last dynamic IDs"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
